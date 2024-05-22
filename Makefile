@@ -130,17 +130,26 @@ PAYLOAD ?= fw_payload.bin
 FWPAYLOAD_SECTORSTART := 2048
 FWPAYLOAD_SECTORSIZE = $(shell ls -l --block-size=512 $(RISCV)/$(PAYLOAD) | cut -d " " -f5 )
 FWPAYLOAD_SECTOREND = $(shell echo $(FWPAYLOAD_SECTORSTART)+$(FWPAYLOAD_SECTORSIZE) | bc)
+
+# Hello World
+HELLO_BIN ?= hello
+HELLO_BIN_SECTORSTART := 131072
+HELLO_BIN_SECTORSIZE = $(shell ls -l --block-size=512 $(RISCV)/$(HELLO_BIN) | cut -d " " -f5 )
+HELLO_PAYLOAD_SECTOREND = $(shell echo $(HELLO_BIN_SECTORSTART)+$(HELLO_BIN_SECTORSIZE) | bc)
+
 SDDEVICE_PART1 = $(shell lsblk $(SDDEVICE) -no PATH | head -2 | tail -1)
 SDDEVICE_PART2 = $(shell lsblk $(SDDEVICE) -no PATH | head -3 | tail -1)
+SDDEVICE_PART3 = $(shell lsblk $(SDDEVICE) -no PATH | head -4 | tail -1)
 # Always flash uImage at 512M, easier for u-boot boot command
 UIMAGE_SECTORSTART := 512M
 flash-sdcard: format-sd
 	dd if=$(RISCV)/$(PAYLOAD) of=$(SDDEVICE_PART1) status=progress oflag=sync bs=1M
-	dd if=$(RISCV)/uImage         of=$(SDDEVICE_PART2) status=progress oflag=sync bs=1M
+	dd if=$(RISCV)/$(HELLO_BIN) of=$(SDDEVICE_PART2) status=progress oflag=sync bs=1M
+	dd if=$(RISCV)/uImage         of=$(SDDEVICE_PART3) status=progress oflag=sync bs=1M
 
 format-sd: $(SDDEVICE)
 	@test -n "$(SDDEVICE)" || (echo 'SDDEVICE must be set, Ex: make flash-sdcard SDDEVICE=/dev/sdc' && exit 1)
-	sgdisk --clear -g --new=1:$(FWPAYLOAD_SECTORSTART):$(FWPAYLOAD_SECTOREND) --new=2:$(UIMAGE_SECTORSTART):0 --typecode=1:3000 --typecode=2:8300 $(SDDEVICE)
+	sgdisk --clear -g --new=1:$(FWPAYLOAD_SECTORSTART):$(FWPAYLOAD_SECTOREND) --new=2:$(HELLO_BIN_SECTORSTART):$(HELLO_PAYLOAD_SECTOREND) --new=3:$(UIMAGE_SECTORSTART):0 --typecode=1:3000 --typecode=2:8300 --typecode=3:8300 $(SDDEVICE)
 
 # specific recipes
 gcc: $(CC)
