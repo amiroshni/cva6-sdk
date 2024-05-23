@@ -9,6 +9,8 @@ PATH     := $(DEST)/bin:$(PATH)
 TOOLCHAIN_PREFIX := $(ROOT)/buildroot/output/host/bin/riscv$(XLEN)-buildroot-linux-gnu-
 CC          := $(TOOLCHAIN_PREFIX)gcc
 OBJCOPY     := $(TOOLCHAIN_PREFIX)objcopy
+AS	    := $(TOOLCHAIN_PREFIX)as
+LD	    := $(TOOLCHAIN_PREFIX)ld
 MKIMAGE     := u-boot/tools/mkimage
 
 NR_CORES := $(shell nproc)
@@ -133,18 +135,23 @@ FWPAYLOAD_SECTOREND = $(shell echo $(FWPAYLOAD_SECTORSTART)+$(FWPAYLOAD_SECTORSI
 
 # Hello World
 HELLO_BIN ?= hello
+HELLO_DIR ?= $(ROOT)/HelloWorld
 HELLO_BIN_SECTORSTART := 131072
 HELLO_BIN_SECTORSIZE = $(shell ls -l --block-size=512 $(RISCV)/$(HELLO_BIN) | cut -d " " -f5 )
 HELLO_PAYLOAD_SECTOREND = $(shell echo $(HELLO_BIN_SECTORSTART)+$(HELLO_BIN_SECTORSIZE) | bc)
+
+$(HELLO_BIN): $(HELLO_DIR)/$(HELLO_BIN).s
+	$(AS) -march=rv64imac -o $(HELLO_DIR)/$(HELLO_BIN).o $(HELLO_DIR)/$(HELLO_BIN).s
+	$(LD) -o $(HELLO_DIR)/$(HELLO_BIN) $(HELLO_DIR)/$(HELLO_BIN).o
 
 SDDEVICE_PART1 = $(shell lsblk $(SDDEVICE) -no PATH | head -2 | tail -1)
 SDDEVICE_PART2 = $(shell lsblk $(SDDEVICE) -no PATH | head -3 | tail -1)
 SDDEVICE_PART3 = $(shell lsblk $(SDDEVICE) -no PATH | head -4 | tail -1)
 # Always flash uImage at 512M, easier for u-boot boot command
 UIMAGE_SECTORSTART := 512M
-flash-sdcard: format-sd
+flash-sdcard: format-sd $(HELLO_DIR)/$(HELLO_BIN)
 	dd if=$(RISCV)/$(PAYLOAD) of=$(SDDEVICE_PART1) status=progress oflag=sync bs=1M
-	dd if=$(RISCV)/$(HELLO_BIN) of=$(SDDEVICE_PART2) status=progress oflag=sync bs=1M
+	dd if=$(HELLO_DIR)/$(HELLO_BIN) of=$(SDDEVICE_PART2) status=progress oflag=sync bs=1M
 	dd if=$(RISCV)/uImage         of=$(SDDEVICE_PART3) status=progress oflag=sync bs=1M
 
 format-sd: $(SDDEVICE)
